@@ -37,11 +37,43 @@ CREATE TABLE IF NOT EXISTS products (
     legal_check TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS documents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_type TEXT NOT NULL CHECK (owner_type IN ('supplier', 'product')),
+    owner_id INTEGER NOT NULL,
+    doc_type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    number TEXT,
+    issued_at TEXT,
+    valid_until TEXT,
+    note TEXT,
+    file_name TEXT,
+    stored_name TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS sales (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER NOT NULL REFERENCES products(id),
+    channel TEXT NOT NULL,
+    buyer_type TEXT NOT NULL CHECK (buyer_type IN ('individual', 'legal')),
+    quantity INTEGER NOT NULL CHECK (quantity > 0),
+    unit_price_rub REAL NOT NULL CHECK (unit_price_rub > 0),
+    commission_rub REAL NOT NULL DEFAULT 0 CHECK (commission_rub >= 0),
+    sold_at TEXT NOT NULL,
+    receipt_number TEXT,
+    refunded INTEGER NOT NULL DEFAULT 0,
+    note TEXT,
+    created_at TEXT NOT NULL
+);
 """
 
 
 def db_path() -> str:
     return os.environ.get("DSH_DB_PATH", "digitalstore.db")
+
+
+def uploads_dir() -> str:
+    return os.environ.get("DSH_UPLOADS_DIR", "uploads")
 
 
 def init_db() -> None:

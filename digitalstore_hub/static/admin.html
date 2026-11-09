@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DigitalStore Hub</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #fff; --text: #1d2330; --muted: #667085; --line: #e3e6eb;
+  --accent: #2f6fde; --ok: #1f8a4c; --warn: #b7791f; --bad: #c53030;
+  --ok-bg: #e6f4ec; --warn-bg: #fdf3e1; --bad-bg: #fde8e8; --chip: #eef1f5;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12151b; --panel: #1b1f27; --text: #e6e8ec; --muted: #98a1b2; --line: #2c323d;
+    --accent: #6c9cf0; --ok: #5cc98a; --warn: #e3b25b; --bad: #f07a7a;
+    --ok-bg: #173126; --warn-bg: #352a14; --bad-bg: #3a1c1c; --chip: #262c36;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+       background: var(--bg); color: var(--text); }
+header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 14px 20px;
+         background: var(--panel); border-bottom: 1px solid var(--line); }
+header h1 { font-size: 17px; margin: 0 12px 0 0; }
+nav { display: flex; flex-wrap: wrap; gap: 4px; }
+nav button { border: 0; background: none; color: var(--muted); padding: 7px 12px;
+             border-radius: 6px; cursor: pointer; font: inherit; }
+nav button.active { background: var(--chip); color: var(--text); font-weight: 600; }
+#regime { margin-left: auto; font-size: 12px; }
+main { max-width: 1200px; margin: 0 auto; padding: 20px 16px 60px; }
+section { display: none; } section.active { display: block; }
+h2 { font-size: 16px; margin: 24px 0 10px; } h2:first-child { margin-top: 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+.tile .label { color: var(--muted); font-size: 12px; }
+.tile .value { font-size: 22px; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.tile .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.bar { height: 8px; background: var(--chip); border-radius: 4px; overflow: hidden; margin-top: 8px; }
+.bar > div { height: 100%; background: var(--accent); }
+.bar.warn > div { background: var(--warn); }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 500; font-size: 12px; white-space: nowrap; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+.empty { color: var(--muted); padding: 12px 0; }
+form.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px 14px; align-items: end; }
+label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--text); font-size: 13px; }
+input, select, textarea { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
+                          border-radius: 6px; padding: 7px 9px; min-width: 0; }
+button.primary, button.small { font: inherit; border: 0; border-radius: 6px; cursor: pointer; }
+button.primary { background: var(--accent); color: #fff; padding: 8px 14px; }
+button.small { background: var(--chip); color: var(--text); padding: 4px 9px; font-size: 12px; margin: 0 4px 4px 0; }
+button.small.danger { color: var(--bad); }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; background: var(--chip); white-space: nowrap; }
+.badge.ok { background: var(--ok-bg); color: var(--ok); }
+.badge.warn { background: var(--warn-bg); color: var(--warn); }
+.badge.bad { background: var(--bad-bg); color: var(--bad); }
+.note { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
+.checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 6px 14px; grid-column: 1 / -1; }
+.full { grid-column: 1 / -1; }
+#toast { position: fixed; right: 16px; bottom: 16px; max-width: min(460px, calc(100vw - 32px)); padding: 12px 14px;
+         border-radius: 8px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 6px 24px rgba(0,0,0,.15);
+         display: none; white-space: pre-wrap; }
+#toast.bad { border-color: var(--bad); color: var(--bad); }
+#toast.ok { border-color: var(--ok); }
+.muted { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>DigitalStore Hub</h1>
+  <nav id="tabs">
+    <button data-tab="overview" class="active">Обзор</button>
+    <button data-tab="products">Товары</button>
+    <button data-tab="suppliers">Поставщики</button>
+    <button data-tab="documents">Документы</button>
+    <button data-tab="sales">Продажи и аналитика</button>
+  </nav>
+  <span id="regime" class="badge"></span>
+</header>
+
+<main>
+<!-- ОБЗОР -->
+<section id="overview" class="active">
+  <div class="tiles" id="ov-tiles"></div>
+  <h2>Лимит дохода НПД</h2>
+  <div class="card" id="ov-limit"></div>
+  <h2>Документы, требующие внимания</h2>
+  <div class="card table-wrap" id="ov-docs"></div>
+</section>
+
+<!-- ТОВАРЫ -->
+<section id="products">
+  <h2>Новый товар</h2>
+  <div class="card">
+    <form class="grid" id="product-form">
+      <label>SKU<input name="sku" required pattern="[A-Za-z0-9_\-]+" placeholder="GUIDE-001"></label>
+      <label class="full">Название<input name="title" required></label>
+      <label>Тип
+        <select name="product_type">
+          <option value="ebook">Электронная инструкция</option>
+          <option value="template">Шаблон</option>
+          <option value="spreadsheet">Таблица</option>
+          <option value="course">Обучающий материал</option>
+          <option value="software">Собственное ПО</option>
+          <option value="game_key">Игровой ключ</option>
+          <option value="license_key">Лицензия ПО</option>
+          <option value="subscription">Подписка</option>
+          <option value="gift_card">Подарочная карта</option>
+        </select></label>
+      <label>Происхождение
+        <select name="ownership">
+          <option value="own_created">Создано мной</option>
+          <option value="resale">Куплено для перепродажи</option>
+          <option value="agency">Агентский договор / комиссия</option>
+        </select></label>
+      <label>Цена, ₽<input name="price_rub" type="number" min="1" step="0.01" required></label>
+      <label>Категория<select name="category_id"></select></label>
+      <label>Поставщик<select name="supplier_id"></select></label>
+      <label class="full">Описание<textarea name="description" rows="2"></textarea></label>
+      <div><button class="primary" type="submit">Проверить и добавить</button></div>
+    </form>
+    <p class="note">Перед сохранением товар проходит юридический фильтр. На НПД перепродажа и посредничество блокируются.</p>
+  </div>
+  <div class="card">
+    <form class="grid" id="category-form">
+      <label>Новая категория<input name="name" required></label>
+      <div><button class="primary" type="submit">Добавить категорию</button></div>
+    </form>
+  </div>
+  <h2>Каталог</h2>
+  <div class="card table-wrap" id="product-table"></div>
+</section>
+
+<!-- ПОСТАВЩИКИ -->
+<section id="suppliers">
+  <div class="card" id="supplier-regime-note"></div>
+  <h2>Карточка проверки поставщика</h2>
+  <div class="card">
+    <form class="grid" id="supplier-form">
+      <label>Название<input name="name" required></label>
+      <label>Юридическое лицо<input name="legal_entity"></label>
+      <label>ИНН<input name="inn" pattern="\d{10}|\d{12}"></label>
+      <label>Сайт<input name="website"></label>
+      <label>Контакт<input name="contact"></label>
+      <label>Страна<input name="country"></label>
+      <label>Тип продукции<input name="product_kind"></label>
+      <label>Договор<input name="contract"></label>
+      <label>Документы происхождения<input name="origin_documents"></label>
+      <label>Территория действия<input name="territory"></label>
+      <label>Срок действия лицензий<input name="license_term"></label>
+      <label>Условия возврата<input name="refund_terms_text"></label>
+      <div class="checks" id="supplier-checks"></div>
+      <div><button class="primary" type="submit">Оценить и сохранить</button></div>
+    </form>
+  </div>
+  <h2>Реестр</h2>
+  <div class="card table-wrap" id="supplier-table"></div>
+</section>
+
+<!-- ДОКУМЕНТЫ -->
+<section id="documents">
+  <h2>Новый документ</h2>
+  <div class="card">
+    <form class="grid" id="document-form">
+      <label>Привязка
+        <select name="owner" required></select></label>
+      <label>Тип
+        <select name="doc_type">
+          <option value="contract">Договор</option>
+          <option value="origin">Подтверждение происхождения</option>
+          <option value="resale_permission">Право перепродажи</option>
+          <option value="invoice">Счёт / инвойс</option>
+          <option value="closing">Акт / УПД</option>
+          <option value="license">Лицензия</option>
+          <option value="authorship">Подтверждение авторства</option>
+          <option value="other">Другое</option>
+        </select></label>
+      <label>Название<input name="title" required></label>
+      <label>Номер<input name="number"></label>
+      <label>Дата выдачи<input name="issued_at" type="date"></label>
+      <label>Действует до<input name="valid_until" type="date"></label>
+      <label>Файл (PDF, DOCX, XLSX, JPG, PNG, TXT; до 10 МБ)<input name="file" type="file"></label>
+      <label class="full">Примечание<input name="note"></label>
+      <div><button class="primary" type="submit">Сохранить</button></div>
+    </form>
+    <p class="note">Инвойс подтверждает покупку, но не право перепродажи. Для линии B нужны отдельные документы «Право перепродажи» и «Подтверждение происхождения».</p>
+  </div>
+  <h2>Реестр документов</h2>
+  <div class="card table-wrap" id="document-table"></div>
+</section>
+
+<!-- ПРОДАЖИ -->
+<section id="sales">
+  <h2>Регистрация продажи</h2>
+  <div class="card">
+    <form class="grid" id="sale-form">
+      <label>Товар<select name="product_id" required></select></label>
+      <label>Канал
+        <select name="channel">
+          <option value="direct">Прямая продажа</option>
+          <option value="ozon">Ozon</option>
+          <option value="yandex_market">Яндекс Маркет</option>
+          <option value="wildberries">Wildberries</option>
+          <option value="other">Другое</option>
+        </select></label>
+      <label>Покупатель
+        <select name="buyer_type">
+          <option value="individual">Физлицо (4 %)</option>
+          <option value="legal">Юрлицо / ИП (6 %)</option>
+        </select></label>
+      <label>Количество<input name="quantity" type="number" min="1" value="1" required></label>
+      <label>Цена за шт., ₽<input name="unit_price_rub" type="number" min="0.01" step="0.01" required></label>
+      <label>Комиссия площадки, ₽<input name="commission_rub" type="number" min="0" step="0.01" value="0"></label>
+      <label>Дата<input name="sold_at" type="date"></label>
+      <label>Номер чека «Мой налог»<input name="receipt_number"></label>
+      <div><button class="primary" type="submit">Добавить</button></div>
+    </form>
+    <p class="note">Налог — оценка: 4 % / 6 % от суммы продажи, без учёта вычета 10 000 ₽. Точная сумма — в «Мой налог».</p>
+  </div>
+  <div style="display:flex;gap:10px;align-items:end;margin:24px 0 10px">
+    <h2 style="margin:0">Аналитика</h2>
+    <label style="flex-direction:row;align-items:center">Год <input id="year" type="number" style="width:90px"></label>
+  </div>
+  <div class="tiles" id="fin-tiles"></div>
+  <div class="card table-wrap"><strong>По месяцам</strong><div id="fin-month"></div></div>
+  <div class="card table-wrap"><strong>По товарам</strong><div id="fin-product"></div></div>
+  <div class="card table-wrap"><strong>По каналам</strong><div id="fin-channel"></div></div>
+  <h2>Журнал продаж</h2>
+  <div class="card table-wrap" id="sale-table"></div>
+</section>
+</main>
+<div id="toast"></div>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const rub = v => (Number(v) || 0).toLocaleString("ru-RU", {minimumFractionDigits: 0, maximumFractionDigits: 2}) + " ₽";
+
+const LABELS = {
+  product_type: {ebook:"Инструкция", template:"Шаблон", spreadsheet:"Таблица", course:"Обучение", software:"ПО",
+                 game_key:"Игровой ключ", license_key:"Лицензия", subscription:"Подписка", gift_card:"Подарочная карта"},
+  status: {draft:"Черновик", active:"Активен", archived:"Архив"},
+  decision: {candidate:"Кандидат", request_documents:"Запросить документы", rejected:"Отказ"},
+  doc_status: {valid:"Действует", expiring:"Истекает", expired:"Истёк", no_expiry:"Бессрочный"},
+  doc_type: {contract:"Договор", origin:"Происхождение", resale_permission:"Право перепродажи", invoice:"Инвойс",
+             closing:"Акт / УПД", license:"Лицензия", authorship:"Авторство", other:"Другое"},
+  channel: {direct:"Прямая", ozon:"Ozon", yandex_market:"Яндекс Маркет", wildberries:"Wildberries", other:"Другое"},
+};
+const BADGE = {active:"ok", draft:"", archived:"", candidate:"ok", request_documents:"warn", rejected:"bad",
+               valid:"ok", expiring:"warn", expired:"bad", no_expiry:""};
+const badge = (kind, v) => `<span class="badge ${BADGE[v] ?? ""}">${esc(LABELS[kind]?.[v] ?? v)}</span>`;
+
+let state = {products: [], categories: [], suppliers: [], criteria: []};
+
+function toast(msg, kind = "ok") {
+  const t = $("#toast"); t.textContent = msg; t.className = kind; t.style.display = "block";
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => t.style.display = "none", kind === "bad" ? 8000 : 3500);
+}
+function errorText(detail) {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) return detail.map(d => `${(d.loc || []).slice(1).join(".")}: ${d.msg}`).join("\n");
+  if (detail?.legal_check) return detail.legal_check;
+  return JSON.stringify(detail);
+}
+async function api(path, opts = {}) {
+  const init = {...opts};
+  if (opts.json !== undefined) { init.body = JSON.stringify(opts.json); init.headers = {"Content-Type": "application/json"}; }
+  const r = await fetch(path, init);
+  if (r.status === 204) return null;
+  const data = await r.json().catch(() => null);
+  if (!r.ok) throw new Error(errorText(data?.detail) || `HTTP ${r.status}`);
+  return data;
+}
+function formData(form) {
+  const out = {};
+  for (const [k, v] of new FormData(form)) if (!(v instanceof File) && v !== "") out[k] = v;
+  return out;
+}
+function table(cols, rows, empty = "Пока пусто") {
+  if (!rows.length) return `<div class="empty">${empty}</div>`;
+  return `<table><thead><tr>${cols.map(c => `<th class="${c.num ? "num" : ""}">${c.t}</th>`).join("")}</tr></thead><tbody>` +
+    rows.map(r => `<tr>${cols.map(c => `<td class="${c.num ? "num" : ""}">${c.f(r)}</td>`).join("")}</tr>`).join("") +
+    "</tbody></table>";
+}
+const guard = fn => async (...a) => { try { await fn(...a); } catch (e) { toast(e.message, "bad"); } };
+
+// ---------- Вкладки ----------
+$("#tabs").addEventListener("click", e => {
+  const tab = e.target.dataset.tab; if (!tab) return;
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+  document.querySelectorAll("main section").forEach(s => s.classList.toggle("active", s.id === tab));
+  history.replaceState(null, "", "#" + tab);
+  refresh();
+});
+
+// ---------- Обзор ----------
+async function loadOverview() {
+  const d = await api("/dashboard");
+  const f = d.finance;
+  $("#ov-tiles").innerHTML = [
+    ["Товары", d.products.active + d.products.draft, `активных ${d.products.active}, черновиков ${d.products.draft}`],
+    ["Поставщики", Object.values(d.suppliers).reduce((a, b) => a + b, 0),
+      `кандидатов ${d.suppliers.candidate}, отказ ${d.suppliers.rejected}`],
+    [`Выручка ${f.year}`, rub(f.total.gross_rub), `${f.total.sales} продаж`],
+    ["Чистыми", rub(f.total.net_rub), `комиссии ${rub(f.total.commission_rub)}, налог ≈ ${rub(f.total.tax_estimate_rub)}`],
+    ["Возвраты", f.refunds.count, rub(f.refunds.amount_rub)],
+    ["Без чека", f.sales_without_receipt, f.sales_without_receipt ? "выбейте чеки в «Мой налог»" : "всё в порядке"],
+  ].map(([l, v, s]) => `<div class="tile"><div class="label">${l}</div><div class="value">${esc(v)}</div><div class="sub">${esc(s)}</div></div>`).join("");
+  const lim = f.npd_limit;
+  $("#ov-limit").innerHTML = `${rub(lim.used_rub)} из ${rub(lim.limit_rub)} — ${lim.used_pct.toLocaleString("ru-RU")} %
+    <div class="bar ${lim.warning ? "warn" : ""}"><div style="width:${Math.min(lim.used_pct, 100)}%"></div></div>
+    ${lim.warning ? '<p class="note">Использовано больше 80 % лимита. При превышении право на НПД теряется.</p>' : ""}`;
+  $("#ov-docs").innerHTML = table([
+    {t: "Документ", f: r => esc(r.title)},
+    {t: "Тип", f: r => esc(LABELS.doc_type[r.doc_type])},
+    {t: "Привязка", f: r => esc(ownerName(r))},
+    {t: "Действует до", f: r => esc(r.valid_until)},
+    {t: "Статус", f: r => badge("doc_status", r.status)},
+  ], d.documents_attention, "Просроченных и истекающих документов нет");
+}
+
+// ---------- Справочники ----------
+async function loadRefs() {
+  [state.products, state.categories, state.suppliers] = await Promise.all([
+    api("/products"), api("/categories"), api("/suppliers")]);
+  const opt = (v, t) => `<option value="${esc(v)}">${esc(t)}</option>`;
+  $("#product-form [name=category_id]").innerHTML = opt("", "—") + state.categories.map(c => opt(c.id, c.name)).join("");
+  $("#product-form [name=supplier_id]").innerHTML = opt("", "—") +
+    state.suppliers.map(s => opt(s.id, `${s.name} (${LABELS.decision[s.decision]})`)).join("");
+  const sel = $("#sale-form [name=product_id]"), keep = sel.value;
+  sel.innerHTML = state.products.filter(p => p.status !== "archived").map(p => opt(p.id, `${p.sku} — ${p.title}`)).join("");
+  if (keep) sel.value = keep;
+  syncSaleDefaults();
+  const owner = $("#document-form [name=owner]"), keepOwner = owner.value;
+  owner.innerHTML = opt("", "— выберите —") +
+    `<optgroup label="Поставщики">${state.suppliers.map(s => opt("supplier:" + s.id, s.name)).join("")}</optgroup>` +
+    `<optgroup label="Товары">${state.products.map(p => opt("product:" + p.id, `${p.sku} — ${p.title}`)).join("")}</optgroup>`;
+  if (keepOwner) owner.value = keepOwner;
+}
+function ownerName(d) {
+  if (d.owner_type === "supplier") return "Поставщик: " + (state.suppliers.find(s => s.id === d.owner_id)?.name ?? "#" + d.owner_id);
+  const p = state.products.find(p => p.id === d.owner_id);
+  return "Товар: " + (p ? p.sku : "#" + d.owner_id);
+}
+
+// ---------- Товары ----------
+function renderProducts() {
+  const cat = id => state.categories.find(c => c.id === id)?.name ?? "—";
+  $("#product-table").innerHTML = table([
+    {t: "SKU", f: p => `<strong>${esc(p.sku)}</strong>`},
+    {t: "Название", f: p => esc(p.title) + `<div class="note">${esc(p.legal_check)}</div>`},
+    {t: "Тип", f: p => esc(LABELS.product_type[p.product_type])},
+    {t: "Линия", f: p => `<span class="badge">${esc(p.line)}</span>`},
+    {t: "Категория", f: p => esc(cat(p.category_id))},
+    {t: "Цена", num: true, f: p => rub(p.price_rub)},
+    {t: "Статус", f: p => badge("status", p.status)},
+    {t: "", f: p => [
+        p.status !== "active" ? `<button class="small" data-act="status" data-id="${p.id}" data-v="active">Активировать</button>` : "",
+        p.status === "active" ? `<button class="small" data-act="status" data-id="${p.id}" data-v="draft">В черновик</button>` : "",
+        p.status !== "archived" ? `<button class="small" data-act="status" data-id="${p.id}" data-v="archived">В архив</button>` : "",
+        `<button class="small" data-act="price" data-id="${p.id}">Цена</button>`,
+        `<button class="small danger" data-act="delete" data-id="${p.id}">Удалить</button>`].join("")},
+  ], state.products, "Каталог пуст — добавьте первый собственный продукт");
+}
+$("#product-table").addEventListener("click", guard(async e => {
+  const b = e.target.closest("button"); if (!b) return;
+  const id = b.dataset.id;
+  if (b.dataset.act === "status") await api(`/products/${id}`, {method: "PATCH", json: {status: b.dataset.v}});
+  if (b.dataset.act === "price") {
+    const v = prompt("Новая цена, ₽"); if (!v) return;
+    await api(`/products/${id}`, {method: "PATCH", json: {price_rub: Number(v)}});
+  }
+  if (b.dataset.act === "delete") {
+    if (!confirm("Удалить товар?")) return;
+    await api(`/products/${id}`, {method: "DELETE"});
+  }
+  toast("Сохранено"); refresh();
+}));
+$("#product-form").addEventListener("submit", guard(async e => {
+  e.preventDefault();
+  const d = formData(e.target);
+  d.price_rub = Number(d.price_rub);
+  for (const k of ["category_id", "supplier_id"]) if (d[k]) d[k] = Number(d[k]);
+  const p = await api("/products", {method: "POST", json: d});
+  e.target.reset(); toast(`Добавлен ${p.sku}: ${p.legal_check}`); refresh();
+}));
+$("#category-form").addEventListener("submit", guard(async e => {
+  e.preventDefault();
+  await api("/categories", {method: "POST", json: formData(e.target)});
+  e.target.reset(); toast("Категория добавлена"); refresh();
+}));
+
+// ---------- Поставщики ----------
+function renderChecks() {
+  $("#supplier-checks").innerHTML = state.criteria.map(c =>
+    `<label class="check"><input type="checkbox" name="chk_${c.key}"> ${esc(c.title)} <span class="muted">(${c.points})</span></label>`).join("");
+}
+function renderSuppliers(regime) {
+  $("#supplier-regime-note").innerHTML = regime === "npd"
+    ? '<span class="badge bad">НПД</span> Закупка и продажа товаров поставщиков заблокированы. Реестр ведётся только для исследования.'
+    : '<span class="badge ok">' + esc(regime.toUpperCase()) + '</span> Линия B доступна только с поставщиком в статусе «Кандидат» после юридической проверки.';
+  $("#supplier-table").innerHTML = table([
+    {t: "Поставщик", f: s => `<strong>${esc(s.name)}</strong><div class="note">${esc([s.legal_entity, s.inn && "ИНН " + s.inn, s.country].filter(Boolean).join(" · "))}</div>`},
+    {t: "Продукция", f: s => esc(s.product_kind || "—")},
+    {t: "Баллы", num: true, f: s => `<strong>${s.score}</strong> / 100`},
+    {t: "Решение", f: s => badge("decision", s.decision) + `<div class="note">${esc(s.decision_note)}</div>`},
+    {t: "Проверки", f: s => state.criteria.map(c =>
+        `<label class="check"><input type="checkbox" data-sup="${s.id}" data-key="${c.key}" ${s.checks[c.key] ? "checked" : ""}> ${esc(c.title)}</label>`).join("")},
+    {t: "Проверен", f: s => esc(s.last_checked_at.slice(0, 10))},
+  ], state.suppliers, "Поставщиков пока нет");
+}
+$("#supplier-table").addEventListener("change", guard(async e => {
+  const id = e.target.dataset.sup; if (!id) return;
+  const checks = {};
+  document.querySelectorAll(`#supplier-table input[data-sup="${id}"]`).forEach(i => checks[i.dataset.key] = i.checked);
+  const s = await api(`/suppliers/${id}/checks`, {method: "PUT", json: checks});
+  toast(`Переоценка: ${s.score} баллов — ${LABELS.decision[s.decision]}`); refresh();
+}));
+$("#supplier-form").addEventListener("submit", guard(async e => {
+  e.preventDefault();
+  const d = formData(e.target), checks = {};
+  for (const k of Object.keys(d)) if (k.startsWith("chk_")) { checks[k.slice(4)] = true; delete d[k]; }
+  d.checks = checks;
+  const s = await api("/suppliers", {method: "POST", json: d});
+  e.target.reset(); toast(`${s.name}: ${s.score} баллов — ${s.decision_note}`); refresh();
+}));
+
+// ---------- Документы ----------
+async function loadDocuments() {
+  const docs = await api("/documents");
+  $("#document-table").innerHTML = table([
+    {t: "Документ", f: d => `<strong>${esc(d.title)}</strong>${d.number ? `<div class="note">№ ${esc(d.number)}</div>` : ""}`},
+    {t: "Тип", f: d => esc(LABELS.doc_type[d.doc_type])},
+    {t: "Привязка", f: d => esc(ownerName(d))},
+    {t: "Выдан", f: d => esc(d.issued_at || "—")},
+    {t: "Действует до", f: d => esc(d.valid_until || "—")},
+    {t: "Статус", f: d => badge("doc_status", d.status)},
+    {t: "Файл", f: d => d.has_file ? `<a href="/documents/${d.id}/file">${esc(d.file_name)}</a>` : '<span class="muted">—</span>'},
+    {t: "", f: d => `<button class="small danger" data-del="${d.id}">Удалить</button>`},
+  ], docs, "Документов пока нет");
+}
+$("#document-table").addEventListener("click", guard(async e => {
+  const id = e.target.dataset.del; if (!id || !confirm("Удалить документ и файл?")) return;
+  await api(`/documents/${id}`, {method: "DELETE"}); toast("Удалено"); refresh();
+}));
+$("#document-form").addEventListener("submit", guard(async e => {
+  e.preventDefault();
+  const d = formData(e.target);
+  if (!d.owner) throw new Error("Сначала добавьте поставщика или товар");
+  const [owner_type, owner_id] = d.owner.split(":"); delete d.owner;
+  const doc = await api("/documents", {method: "POST", json: {...d, owner_type, owner_id: Number(owner_id)}});
+  const file = e.target.file.files[0];
+  if (file) {
+    const fd = new FormData(); fd.append("file", file);
+    await api(`/documents/${doc.id}/file`, {method: "POST", body: fd});
+  }
+  e.target.reset(); toast("Документ сохранён"); refresh();
+}));
+
+// ---------- Продажи ----------
+async function loadSales() {
+  const year = $("#year").value || new Date().getFullYear();
+  const [sales, s] = await Promise.all([api("/sales"), api(`/analytics/summary?year=${year}`)]);
+  const t = s.total;
+  $("#fin-tiles").innerHTML = [
+    ["Выручка", rub(t.gross_rub), `${t.sales} продаж, ${t.units} шт.`],
+    ["Комиссии площадок", rub(t.commission_rub), ""],
+    ["Налог НПД (оценка)", rub(t.tax_estimate_rub), ""],
+    ["Чистыми", rub(t.net_rub), t.gross_rub ? `рентабельность ${(t.net_rub / t.gross_rub * 100).toFixed(1)} %` : ""],
+    ["Возвраты", s.refunds.count, rub(s.refunds.amount_rub)],
+    ["Лимит НПД", s.npd_limit.used_pct.toLocaleString("ru-RU") + " %", `из ${rub(s.npd_limit.limit_rub)}`],
+  ].map(([l, v, sub]) => `<div class="tile"><div class="label">${l}</div><div class="value">${esc(v)}</div><div class="sub">${esc(sub)}</div></div>`).join("");
+  const money = [
+    {t: "Продаж", num: true, f: r => r.sales},
+    {t: "Выручка", num: true, f: r => rub(r.gross_rub)},
+    {t: "Комиссии", num: true, f: r => rub(r.commission_rub)},
+    {t: "Налог", num: true, f: r => rub(r.tax_estimate_rub)},
+    {t: "Чистыми", num: true, f: r => `<strong>${rub(r.net_rub)}</strong>`},
+  ];
+  $("#fin-month").innerHTML = table([{t: "Месяц", f: r => esc(r.month)}, ...money], s.by_month, "Нет продаж за год");
+  $("#fin-product").innerHTML = table([{t: "Товар", f: r => `${esc(r.sku)} — ${esc(r.title)}`}, ...money], s.by_product, "Нет продаж за год");
+  $("#fin-channel").innerHTML = table([{t: "Канал", f: r => esc(LABELS.channel[r.channel])}, ...money], s.by_channel, "Нет продаж за год");
+  const prod = id => state.products.find(p => p.id === id)?.sku ?? "#" + id;
+  $("#sale-table").innerHTML = table([
+    {t: "Дата", f: r => esc(r.sold_at)},
+    {t: "Товар", f: r => esc(prod(r.product_id))},
+    {t: "Канал", f: r => esc(LABELS.channel[r.channel])},
+    {t: "Кол-во", num: true, f: r => r.quantity},
+    {t: "Сумма", num: true, f: r => rub(r.gross_rub)},
+    {t: "Комиссия", num: true, f: r => rub(r.commission_rub)},
+    {t: "Чистыми", num: true, f: r => rub(r.net_rub)},
+    {t: "Чек", f: r => r.receipt_number ? esc(r.receipt_number) : '<span class="badge warn">нет чека</span>'},
+    {t: "", f: r => r.refunded ? '<span class="badge bad">возврат</span>' :
+        `${r.receipt_number ? "" : `<button class="small" data-receipt="${r.id}">Чек</button>`}<button class="small danger" data-refund="${r.id}">Возврат</button>`},
+  ], sales, "Продаж пока нет");
+}
+$("#year").value = new Date().getFullYear();
+$("#year").addEventListener("change", guard(loadSales));
+$("#sale-table").addEventListener("click", guard(async e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.receipt) {
+    const v = prompt("Номер чека из «Мой налог»"); if (!v) return;
+    await api(`/sales/${b.dataset.receipt}`, {method: "PATCH", json: {receipt_number: v}});
+  }
+  if (b.dataset.refund) {
+    if (!confirm("Отметить возврат? Не забудьте аннулировать чек в «Мой налог».")) return;
+    await api(`/sales/${b.dataset.refund}`, {method: "PATCH", json: {refunded: true}});
+  }
+  toast("Сохранено"); refresh();
+}));
+function syncSaleDefaults(force = false) {
+  const f = $("#sale-form");
+  const p = state.products.find(p => p.id === Number(f.product_id.value));
+  if (p && (force || !f.unit_price_rub.value)) f.unit_price_rub.value = p.price_rub;
+  if (!f.sold_at.value) f.sold_at.value = new Date().toLocaleDateString("sv-SE");
+}
+$("#sale-form [name=product_id]").addEventListener("change", () => syncSaleDefaults(true));
+$("#sale-form").addEventListener("submit", guard(async e => {
+  e.preventDefault();
+  const d = formData(e.target);
+  if (!d.product_id) throw new Error("Сначала добавьте товар");
+  for (const k of ["product_id", "quantity", "unit_price_rub", "commission_rub"]) if (d[k] !== undefined) d[k] = Number(d[k]);
+  await api("/sales", {method: "POST", json: d});
+  e.target.reset(); toast("Продажа добавлена"); refresh();
+}));
+
+// ---------- Загрузка ----------
+async function refresh() {
+  try {
+    const info = await api("/");
+    $("#regime").textContent = `Режим: ${info.tax_regime.toUpperCase()} · линия B: ${info.line_b_third_party === "blocked" ? "заблокирована" : "по допуску"}`;
+    $("#regime").className = "badge " + (info.line_b_third_party === "blocked" ? "warn" : "ok");
+    if (!state.criteria.length) { state.criteria = await api("/suppliers/criteria"); renderChecks(); }
+    await loadRefs();
+    const tab = document.querySelector("main section.active").id;
+    if (tab === "overview") await loadOverview();
+    if (tab === "products") renderProducts();
+    if (tab === "suppliers") renderSuppliers(info.tax_regime);
+    if (tab === "documents") await loadDocuments();
+    if (tab === "sales") await loadSales();
+  } catch (e) { toast(e.message, "bad"); }
+}
+const initial = location.hash.slice(1);
+if (initial && document.getElementById(initial)) $(`#tabs [data-tab="${initial}"]`).click(); else refresh();
+</script>
+</body>
+</html>

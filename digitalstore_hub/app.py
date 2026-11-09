@@ -1,25 +1,34 @@
-"""DigitalStore Hub MVP 0.1 — каталог собственных цифровых продуктов
-с встроенным юридическим фильтром НПД и реестром поставщиков.
+"""DigitalStore Hub 0.2 — каталог собственных цифровых продуктов
+с встроенным юридическим фильтром НПД, реестром поставщиков, учётом
+документов, продаж и административной панелью.
 
-Запуск: uvicorn app:app --reload
+Запуск: uvicorn app:app --reload  →  http://127.0.0.1:8000/admin
 """
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import os
+import secrets
 import sqlite3
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
 import db
+import documents
+import finance
 from legal import Ownership, ProductType, TaxRegime, check_product
 from suppliers import CRITERIA, SupplierDecision, evaluate
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
 def current_regime() -> TaxRegime:
@@ -37,6 +46,28 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="DigitalStore Hub", version=VERSION, lifespan=lifespan)
+app.include_router(documents.router)
+app.include_router(finance.router)
+
+
+@app.middleware("http")
+async def basic_auth(request: Request, call_next):
+    """Если задан DSH_ADMIN_PASSWORD — все запросы требуют HTTP Basic (логин admin)."""
+    password = os.environ.get("DSH_ADMIN_PASSWORD")
+    if password:
+        ok = False
+        header = request.headers.get("authorization", "")
+        if header.lower().startswith("basic "):
+            try:
+                user, _, pwd = base64.b64decode(header[6:]).decode().partition(":")
+                ok = (secrets.compare_digest(user, "admin")
+                      and secrets.compare_digest(pwd.encode(), password.encode()))
+            except (binascii.Error, UnicodeDecodeError):
+                ok = False
+        if not ok:
+            return Response("Требуется авторизация", status_code=401,
+                            headers={"WWW-Authenticate": 'Basic realm="DigitalStore Hub"'})
+    return await call_next(request)
 
 
 # ---------- Схемы ----------
@@ -121,6 +152,39 @@ def root():
         "line_a_own_products": "enabled",
         "line_b_third_party": "blocked" if regime is TaxRegime.NPD else "requires approved supplier",
         "docs": "/docs",
+        "admin": "/admin",
+    }
+
+
+@app.get("/admin", include_in_schema=False)
+def admin_panel():
+    return FileResponse(STATIC_DIR / "admin.html", media_type="text/html")
+
+
+@app.get("/dashboard")
+def dashboard():
+    """Сводка для главной страницы админ-панели."""
+    regime = current_regime()
+    with db.connect() as conn:
+        products = {r["status"]: r["n"] for r in conn.execute(
+            "SELECT status, COUNT(*) AS n FROM products GROUP BY status")}
+        suppliers = {r["decision"]: r["n"] for r in conn.execute(
+            "SELECT decision, COUNT(*) AS n FROM suppliers GROUP BY decision")}
+        docs = [documents.doc_row(r) for r in conn.execute(
+            "SELECT * FROM documents WHERE valid_until IS NOT NULL")]
+    attention = [d for d in docs if d["status"] in ("expired", "expiring")]
+    attention.sort(key=lambda d: d["valid_until"])
+    stats = finance.summary()
+    return {
+        "version": VERSION,
+        "tax_regime": regime.value,
+        "line_b_blocked": regime is TaxRegime.NPD,
+        "products": {"draft": products.get("draft", 0), "active": products.get("active", 0),
+                     "archived": products.get("archived", 0)},
+        "suppliers": {d.value: suppliers.get(d.value, 0) for d in SupplierDecision},
+        "documents_attention": attention,
+        "finance": {k: stats[k] for k in ("year", "total", "refunds",
+                                          "sales_without_receipt", "npd_limit")},
     }
 
 
@@ -227,8 +291,14 @@ def update_product(product_id: int, body: ProductUpdate):
 @app.delete("/products/{product_id}", status_code=204)
 def delete_product(product_id: int):
     with db.connect() as conn:
-        if conn.execute("DELETE FROM products WHERE id = ?", (product_id,)).rowcount == 0:
+        if not conn.execute("SELECT 1 FROM products WHERE id = ?", (product_id,)).fetchone():
             raise HTTPException(404, "Товар не найден")
+        if conn.execute("SELECT 1 FROM sales WHERE product_id = ?", (product_id,)).fetchone():
+            raise HTTPException(409, "По товару есть продажи — переведите его в архив")
+        if conn.execute("SELECT 1 FROM documents WHERE owner_type = 'product' AND owner_id = ?",
+                        (product_id,)).fetchone():
+            raise HTTPException(409, "К товару привязаны документы — сначала удалите их")
+        conn.execute("DELETE FROM products WHERE id = ?", (product_id,))
 
 
 # ---------- Поставщики ----------
